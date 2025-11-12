@@ -28,17 +28,17 @@ package org.apache.druid.query.aggregation.variablewidthhistogram;
   */
  final class VariableWidthHistogramBufferAggregatorHelper
  {
-   private final int numBuckets;
-   public VariableWidthHistogramBufferAggregatorHelper(int numBuckets)
+   private final int maxNumBuckets;
+   public VariableWidthHistogramBufferAggregatorHelper(int maxNumBuckets)
    {
-     this.numBuckets = numBuckets;
+     this.maxNumBuckets = maxNumBuckets;
    }
  
    public void init(ByteBuffer buf, int position)
    {
      ByteBuffer mutationBuffer = buf.duplicate();
      mutationBuffer.position(position);
-     VariableWidthHistogram histogram = new VariableWidthHistogram(numBuckets);
+     VariableWidthHistogram histogram = new VariableWidthHistogram(maxNumBuckets);
      mutationBuffer.put(histogram.toBytes());
    }
  

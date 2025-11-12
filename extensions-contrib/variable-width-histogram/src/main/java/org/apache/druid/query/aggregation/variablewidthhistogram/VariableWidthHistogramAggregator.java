@@ -17,20 +17,23 @@
  * under the License.
  */
 
- package org.apache.druid.query.aggregation.variablewidthhistogram;
+package org.apache.druid.query.aggregation.variablewidthhistogram;
 
- import java.lang.Double;
- import org.apache.druid.query.aggregation.Aggregator;
- import org.apache.druid.segment.BaseObjectColumnValueSelector;
- import org.apache.druid.segment.column.ColumnType;
- 
- import javax.annotation.Nullable;
- import java.util.Comparator;
- 
- public class VariableWidthHistogramAggregator implements Aggregator
- {
-   public static final String TYPE_NAME = "variableWidthHistogram";
-   public static final ColumnType TYPE = ColumnType.ofComplex(TYPE_NAME);
+import java.lang.Double;
+import org.apache.druid.java.util.common.logger.Logger;
+import org.apache.druid.query.aggregation.Aggregator;
+import org.apache.druid.segment.BaseObjectColumnValueSelector;
+import org.apache.druid.segment.column.ColumnType;
+
+import javax.annotation.Nullable;
+import java.util.Comparator;
+
+public class VariableWidthHistogramAggregator implements Aggregator
+{
+  private static final Logger log = new Logger(VariableWidthHistogramAggregator.class);
+  
+  public static final String TYPE_NAME = "variableWidthHistogram";
+  public static final ColumnType TYPE = ColumnType.ofComplex(TYPE_NAME);
  
    public static final Comparator COMPARATOR = new Comparator()
    {
@@ -49,19 +52,33 @@
 
   public VariableWidthHistogramAggregator(
       BaseObjectColumnValueSelector selector,
-      int numBuckets
+      int maxNumBuckets
   )
    {
      this.selector = selector;
-     this.histogram = new VariableWidthHistogram(numBuckets);
+     this.histogram = new VariableWidthHistogram(maxNumBuckets);
    }
  
-   @Override
-   public void aggregate()
-   {
-     Object val = selector.getObject();
-     histogram.combine(val);
-   }
+  @Override
+  public void aggregate()
+  {
+    Object val = selector.getObject();
+    
+    if (val == null) {
+      log.info("[VWH-AGG] aggregate: selector returned null");
+    } else if (val instanceof VariableWidthHistogram) {
+      VariableWidthHistogram vwh = (VariableWidthHistogram) val;
+      log.info("[VWH-AGG] aggregate: got VariableWidthHistogram[numBuckets=%d, count=%s, min=%s, max=%s]",
+               vwh.getNumBuckets(), vwh.getCount(), vwh.getMin(), vwh.getMax());
+    } else {
+      log.info("[VWH-AGG] aggregate: got unexpected type: %s, value=%s", val.getClass(), val);
+    }
+    
+    histogram.combine(val);
+    
+    log.info("[VWH-AGG] aggregate: after combine, histogram[count=%s, min=%s, max=%s]",
+             histogram.getCount(), histogram.getMin(), histogram.getMax());
+  }
  
    @Nullable
    @Override

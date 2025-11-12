@@ -38,9 +38,7 @@ public class VariableWidthHistogramDruidModule implements DruidModule
   public List<? extends Module> getJacksonModules()
   {
     return ImmutableList.of(
-        new SimpleModule(
-            getClass().getSimpleName()
-        ).registerSubtypes(
+        new SimpleModule().registerSubtypes(
             new NamedType(
                 VariableWidthHistogramAggregatorFactory.class,
                 VariableWidthHistogramAggregator.TYPE_NAME

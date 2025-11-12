@@ -17,26 +17,29 @@
  * under the License.
  */
 
- package org.apache.druid.query.aggregation.variablewidthhistogram;
+package org.apache.druid.query.aggregation.variablewidthhistogram;
 
- import com.fasterxml.jackson.annotation.JsonIgnore;
- import com.fasterxml.jackson.annotation.JsonProperty;
- import com.fasterxml.jackson.annotation.JsonValue;
- import com.google.common.annotations.VisibleForTesting;
- import org.apache.druid.java.util.common.ISE;
- import org.apache.druid.java.util.common.StringUtils;
- 
- import javax.annotation.Nullable;
- import java.nio.ByteBuffer;
- import java.nio.charset.StandardCharsets;
- import java.util.Arrays;
- import java.util.Objects;
- import java.util.concurrent.locks.ReadWriteLock;
- import java.util.concurrent.locks.ReentrantReadWriteLock;
- 
- public class VariableWidthHistogram
- {
-   public static final byte SERIALIZATION_VERSION = 0x01;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonValue;
+import com.google.common.annotations.VisibleForTesting;
+import org.apache.druid.java.util.common.ISE;
+import org.apache.druid.java.util.common.StringUtils;
+import org.apache.druid.java.util.common.logger.Logger;
+
+import javax.annotation.Nullable;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+public class VariableWidthHistogram
+{
+  private static final Logger log = new Logger(VariableWidthHistogram.class);
+  
+  public static final byte SERIALIZATION_VERSION = 0x01;
  
    /**
     * Serialization header format:
@@ -52,10 +55,12 @@
     * double: max
     * double: min
    */
-  public static final int FIXED_SIZE_FIELDS_SIZE = Double.BYTES +
-                                                Integer.BYTES +
-                                                Double.BYTES +
-                                                Double.BYTES;
+  public static final int FIXED_SIZE_FIELDS_SIZE = Double.BYTES +      // count
+                                               Integer.BYTES +     // maxNumBuckets
+                                               Integer.BYTES +     // numBuckets
+                                               Long.BYTES +        // missingValueCount
+                                               Double.BYTES +      // max
+                                               Double.BYTES;       // min
  
    /**
     * Serialization format:
@@ -80,6 +85,7 @@
    private final ReadWriteLock readWriteLock;
  
    private int numBuckets;
+   private int maxNumBuckets;
    private double[] boundaries;
    private double[] counts;
    private long missingValueCount = 0;
@@ -87,16 +93,31 @@
    private double max = Double.NEGATIVE_INFINITY;
    private double min = Double.POSITIVE_INFINITY;
  
-   public VariableWidthHistogram(int numBuckets)
+   public VariableWidthHistogram(int maxNumBuckets)
    {
      this.readWriteLock = new ReentrantReadWriteLock(true);
-     this.numBuckets = numBuckets;
-     this.boundaries = new double[numBuckets - 1];
-     this.counts = new double[numBuckets];
+     this.maxNumBuckets = maxNumBuckets;
+   }
+
+   protected VariableWidthHistogram(
+    int maxNumBuckets,
+    long missingValueCount,
+    double count,
+    double max,
+    double min
+   )
+   {
+     this.maxNumBuckets = maxNumBuckets;
+     this.missingValueCount = missingValueCount;
+     this.count = count;
+     this.max = max;
+     this.min = min;
+     this.readWriteLock = new ReentrantReadWriteLock(true);
    }
  
    @VisibleForTesting
    protected VariableWidthHistogram(
+    int maxNumBuckets,
     int numBuckets,
     double[] boundaries,
     double[] counts,
@@ -106,6 +127,7 @@
     double min
    )
    {
+     this.maxNumBuckets = maxNumBuckets;
      this.numBuckets = numBuckets;
      this.missingValueCount = missingValueCount;
      this.boundaries = boundaries;
@@ -121,6 +143,7 @@
    {
      // only used for tests/benchmarks
      return new VariableWidthHistogram(
+        maxNumBuckets,
         numBuckets,
         Arrays.copyOf(boundaries, boundaries.length),
         Arrays.copyOf(counts, counts.length),
@@ -282,30 +305,40 @@
     *
     * @param otherHistogram
     */
-   public void combineHistogram(VariableWidthHistogram otherHistogram)
-   {
-     if (otherHistogram == null) {
-       return;
-     }
- 
-     readWriteLock.writeLock().lock();
-     otherHistogram.getReadWriteLock().readLock().lock();
- 
-     try {
-       missingValueCount += otherHistogram.getMissingValueCount();
- 
-       if (numBuckets == otherHistogram.getNumBuckets() &&
-           Arrays.equals(boundaries, otherHistogram.getBoundaries())) {
-         combineHistogramSameBuckets(otherHistogram);
-       } else {
-         combineHistogramDifferentBuckets(otherHistogram);
-       }
-     }
-     finally {
-       readWriteLock.writeLock().unlock();
-       otherHistogram.getReadWriteLock().readLock().unlock();
-     }
-   }
+  public void combineHistogram(VariableWidthHistogram otherHistogram)
+  {
+    if (otherHistogram == null) {
+      log.info("[VWH-COMBINE] combineHistogram called with null otherHistogram");
+      return;
+    }
+
+    log.info("[VWH-COMBINE] Before combine: this[numBuckets=%d, count=%s, min=%s, max=%s, boundaries=%s] other[numBuckets=%d, count=%s, min=%s, max=%s, boundaries=%s]",
+             numBuckets, count, min, max, Arrays.toString(boundaries),
+             otherHistogram.getNumBuckets(), otherHistogram.getCount(), otherHistogram.getMin(), otherHistogram.getMax(), Arrays.toString(otherHistogram.getBoundaries()));
+
+    readWriteLock.writeLock().lock();
+    otherHistogram.getReadWriteLock().readLock().lock();
+
+    try {
+      missingValueCount += otherHistogram.getMissingValueCount();
+
+      if (numBuckets == otherHistogram.getNumBuckets() &&
+          Arrays.equals(boundaries, otherHistogram.getBoundaries())) {
+        log.info("[VWH-COMBINE] Using combineHistogramSameBuckets");
+        combineHistogramSameBuckets(otherHistogram);
+      } else {
+        log.info("[VWH-COMBINE] Using combineHistogramDifferentBuckets");
+        combineHistogramDifferentBuckets(otherHistogram);
+      }
+      
+      log.info("[VWH-COMBINE] After combine: this[count=%s, min=%s, max=%s, counts=%s]",
+               count, min, max, Arrays.toString(counts));
+    }
+    finally {
+      readWriteLock.writeLock().unlock();
+      otherHistogram.getReadWriteLock().readLock().unlock();
+    }
+  }
  
    /**
     * Merge another histogram that has the same range and same buckets.
@@ -314,9 +347,9 @@
     */
    private void combineHistogramSameBuckets(VariableWidthHistogram otherHistogram)
    {
-     double[] otherCountsArray = otherHistogram.getCounts();
+     double[] otherCounts = otherHistogram.getCounts();
      for (int i = 0; i < numBuckets; i++) {
-       counts[i] += otherCountsArray[i];
+       counts[i] += otherCounts[i];
      }
  
      count += otherHistogram.getCount();
@@ -336,7 +369,15 @@
     */
    private void combineHistogramDifferentBuckets(VariableWidthHistogram otherHistogram)
    {
-      simpleInterpolateMerge(otherHistogram);
+    if (otherHistogram.getNumBuckets() == 0) {
+      return;
+     }
+
+    if (numBuckets == 0) {
+      mergeZeroBuckets(otherHistogram);
+     return;
+    }
+    // simpleInterpolateMerge(otherHistogram);
    }
  
    /**
@@ -345,161 +386,193 @@
     *
     * Suppose we have the following histograms:
     *
-    *    0   |   0   |   0   |   0   |   0   |   0
-    *        1       3       4       6       7
+    *    |   0   |   0   |   0   |   0   |   0   |   0   |
+    *  -inf      1       3       4       6       10      inf
     *
-    *    6   |   7   |   0   |   0
-    *        2       6       8
+    *    |   6   |   7   |   0   |   3   |
+    *  -inf      2       6       8      inf
     *
     * We will preserve the bucketing scheme of our histogram, and determine what cut-off points within the other
     * histogram align with our bucket boundaries.
     *
     * Using this example, we would effectively rebucket the second histogram to the following:
     *
-    *    3   |   4.75   |   1.75   |   3.5   |   0   |   0
-    *        1          3          4         6       7
+    *    |   6   |   1.75   |   1.75   |   3.5   |   0   |   3   |
+    *  -inf      1          3          4         6       10      inf
     *
     *
     * @param otherHistogram other histogram to be merged
     */
   private void simpleInterpolateMerge(VariableWidthHistogram otherHistogram)
   {
-    if (otherHistogram.areBoundariesAllZero()) {
-      return;
-     }
-
-    if (areBoundariesAllZero()) {
-     mergeBoundariesAllZero(otherHistogram);
-     return;
-    }
 
     double[] otherBoundaries = otherHistogram.getBoundaries();
     double[] otherCounts = otherHistogram.getCounts();
     int otherNumBuckets = otherHistogram.getNumBuckets();
+    double otherMin = otherHistogram.getMin();
+    double otherMax = otherHistogram.getMax();
 
-    // TODO: review this code
-    
-    // For each bucket in this histogram, interpolate counts from other histogram
-    for (int i = 0; i < numBuckets; i++) {
-      // Determine the range of this bucket [leftBound, rightBound]
-      double leftBound = (i == 0) ? Double.NEGATIVE_INFINITY : boundaries[i - 1];
-      double rightBound = (i == numBuckets - 1) ? Double.POSITIVE_INFINITY : boundaries[i];
+    int i = 0;
+    int j = 0;
+
+    double upperBound, lowerBound, otherUpperBound, otherLowerBound;
+    double overlap, bucketWidth, overlapProportion = 0;
+
+    while (i < numBuckets && j < otherNumBuckets) {
+      lowerBound = (i == 0) ? min : boundaries[i - 1];
+      upperBound = (i == numBuckets - 1) ? max : boundaries[i];
+      otherLowerBound = (j == 0) ? otherMin : otherBoundaries[j - 1];
+      otherUpperBound = (j == otherNumBuckets - 1) ? otherMax : otherBoundaries[j];
       
-      // Iterate through all buckets in the other histogram to find overlaps
-      for (int j = 0; j < otherNumBuckets; j++) {
-        double otherLeftBound = (j == 0) ? Double.NEGATIVE_INFINITY : otherBoundaries[j - 1];
-        double otherRightBound = (j == otherNumBuckets - 1) ? Double.POSITIVE_INFINITY : otherBoundaries[j];
-        
-        // Calculate the overlap between this bucket and other bucket
-        double overlapLeft = Math.max(leftBound, otherLeftBound);
-        double overlapRight = Math.min(rightBound, otherRightBound);
-        
-        // If there's an overlap, interpolate the count
-        if (overlapLeft < overlapRight) {
-          double otherBucketWidth = getBucketWidth(otherLeftBound, otherRightBound, 
-                                                     otherHistogram.getMin(), otherHistogram.getMax());
-          double overlapWidth = getBucketWidth(overlapLeft, overlapRight, 
-                                               otherHistogram.getMin(), otherHistogram.getMax());
-          
-          if (otherBucketWidth > 0) {
-            // Proportion of the other bucket that overlaps with this bucket
-            double proportion = overlapWidth / otherBucketWidth;
-            counts[i] += otherCounts[j] * proportion;
-          } else if (otherCounts[j] > 0) {
-            // If the bucket width is 0 but has count, it's a point mass
-            // Add the entire count if the point falls within this bucket
-            counts[i] += otherCounts[j];
-          }
-        }
+      overlap = Math.min(upperBound, otherUpperBound) - Math.max(lowerBound, otherLowerBound);
+      bucketWidth = otherUpperBound - otherLowerBound;
+      overlapProportion = overlap / bucketWidth;
+
+      log.info("i=%d, j=%d: [%f,%f] x [%f,%f] -> overlap=%f, width=%f, prop=%f",
+               i, j, upperBound, lowerBound, otherUpperBound, otherLowerBound,
+               overlap, bucketWidth, overlapProportion);
+
+      if ((overlap  == Double.POSITIVE_INFINITY && bucketWidth == Double.POSITIVE_INFINITY) 
+       || (overlap  == Double.NEGATIVE_INFINITY && bucketWidth == Double.NEGATIVE_INFINITY)) {
+        counts[i] += otherCounts[j];
+      } else if (overlapProportion > 0) {
+        counts[i] += otherCounts[j] * overlapProportion;
+      }
+
+      if (otherUpperBound < upperBound) {
+        j++;
+      } else {
+        i++;
       }
     }
+
+    while (j < otherNumBuckets) {
+      log.info("Adding remaining bucket from other histogram: j=%d, otherCount=%f, count=%f", j, otherCounts[j], counts[numBuckets - 1]);
+      if (overlapProportion > 0) {
+        counts[numBuckets - 1] += otherCounts[j] * (1 - overlapProportion);
+        overlapProportion = 0;
+      } else {
+        counts[numBuckets - 1] += otherCounts[j];
+      }
+      j++;
+    }
+
+    if (i < numBuckets) {
+      log.info("Adding remaining bucket from this histogram: i=%d, count=%f", i, counts[i]);
+      for (int k = 0; k < otherNumBuckets; k++) {
+        log.info("Adding bucket from other histogram: k=%d, count=%f", k, otherCounts[k]);
+        counts[i] += otherCounts[k];
+      }
+      
+    }
+
+    // if (j < otherNumBuckets) {
+    //   // Other histogram is entirely to the RIGHT - add remaining buckets to the LAST bucket
+    //   log.info("Other histogram is entirely to the right, adding remaining buckets to last bucket");
+    //   while (j < otherNumBuckets) {
+    //     log.info("Adding remaining bucket from other histogram: j=%d, count=%f", j, otherCounts[j]);
+    //     counts[numBuckets - 1] += otherCounts[j];
+    //     j++;
+    //   }
+    // } else if (i < numBuckets && j == otherNumBuckets) {
+    //   // Check if nothing was added from the other histogram (all buckets had negative overlap)
+    //   // This means the other histogram was entirely to the LEFT - add all its buckets to the FIRST bucket
+    //   log.info("Other histogram is entirely to the left, adding all buckets to first bucket");
+    //   for (int k = 0; k < otherNumBuckets; k++) {
+    //     log.info("Adding bucket from other histogram: k=%d, count=%f", k, otherCounts[k]);
+    //     counts[0] += otherCounts[k];
+    //   }
+    // }
+  
+
     
+
     // Update aggregate statistics
     count += otherHistogram.getCount();
     max = Math.max(max, otherHistogram.getMax());
     min = Math.min(min, otherHistogram.getMin());
   }
+
+
+ private void mergeZeroBuckets(VariableWidthHistogram otherHistogram)
+ {
+   log.info("[VWH-MERGE-ZERO] mergeBoundariesAllZero called: this.boundaries=%s, other.boundaries=%s",
+            Arrays.toString(boundaries), Arrays.toString(otherHistogram.getBoundaries()));
+   
+  if (otherHistogram.getNumBuckets() == 0) {
+    log.info("[VWH-MERGE-ZERO] other histogram also has all-zero boundaries, returning");
+    return;
+  }
   
+   log.info("[VWH-MERGE-ZERO] Copying from other histogram: numBuckets=%d->%d",
+            numBuckets, otherHistogram.getNumBuckets());
+   
+   int otherNumBuckets = otherHistogram.getNumBuckets();
+   double[] otherBoundaries = otherHistogram.getBoundaries();
+   double[] otherCounts = otherHistogram.getCounts();
+   if (otherNumBuckets <= maxNumBuckets) {
+    numBuckets = otherNumBuckets;
+    counts = Arrays.copyOf(otherCounts, numBuckets);
+    boundaries = Arrays.copyOf(otherBoundaries, numBuckets-1);
+   } else {
+    numBuckets = maxNumBuckets;
+    boundaries = new double[numBuckets-1];
+    counts = new double[numBuckets];
+    for (int i = 0; i < numBuckets-1; i++) {
+      boundaries[i] = otherBoundaries[i];
+      counts[i] = otherCounts[i];
+    }
+    for (int i = numBuckets-1; i < otherNumBuckets; i++) {
+      counts[numBuckets-1] += otherCounts[i];
+    }
+   }
+   
+   // Update aggregate statistics
+   count = otherHistogram.getCount();
+   missingValueCount += otherHistogram.getMissingValueCount();
+   max = otherHistogram.getMax();
+   min = otherHistogram.getMin();
+   
+   log.info("[VWH-MERGE-ZERO] After merge: boundaries=%s, counts=%s, count=%s, min=%s, max=%s",
+            Arrays.toString(boundaries), Arrays.toString(counts), count, min, max);
+ }
+ 
   /**
-   * Calculate the effective width of a bucket, handling infinite bounds.
-   * For buckets with infinite bounds, we use the histogram's min/max values.
-   * 
-   * @param left the left bound of the bucket
-   * @param right the right bound of the bucket
-   * @param histMin the minimum value in the histogram
-   * @param histMax the maximum value in the histogram
-   * @return the effective width of the bucket
+   * Encode the serialized form generated by toBytes() in Base64, used as the JSON serialization format.
+   *
+   * @return Base64 serialization
    */
-  private double getBucketWidth(double left, double right, double histMin, double histMax)
+  @JsonValue
+  public String toBase64()
   {
-    // Handle infinite bounds by using histogram min/max
-    if (Double.isInfinite(left)) {
-      left = histMin;
-    }
-    if (Double.isInfinite(right)) {
-      right = histMax;
-    }
-    
-    // If both are still infinite or invalid, return 0
-    if (Double.isInfinite(left) || Double.isInfinite(right)) {
-      return 0;
-    }
-    
-    return Math.max(0, right - left);
+    byte[] asBytes = toBytes();
+    return StringUtils.fromUtf8(StringUtils.encodeBase64(asBytes));
   }
 
-   /**
-    * Checks if all boundaries of the histogram are zeros.
-    *
-    * @return true if all entries in boundaries are 0.0, false otherwise
-    */
-   public boolean areBoundariesAllZero()
-   {
-     for (double boundary : boundaries) {
-       if (boundary != 0.0) {
-         return false;
-       }
-     }
-     return true;
-   }
-
-   private void mergeBoundariesAllZero(VariableWidthHistogram otherHistogram)
-   {
-    if (otherHistogram.areBoundariesAllZero()) {
-      return;
+  /**
+   * Convert the histogram to a Map for JSON representation.
+   * This is useful for query results when you want structured JSON instead of base64.
+   *
+   * @return Map containing histogram fields
+   */
+  public java.util.Map<String, Object> toMap()
+  {
+    readWriteLock.readLock().lock();
+    try {
+      java.util.Map<String, Object> map = new java.util.LinkedHashMap<>();
+      map.put("numBuckets", numBuckets);
+      map.put("boundaries", boundaries);
+      map.put("counts", counts);
+      map.put("missingValueCount", missingValueCount);
+      map.put("count", count);
+      map.put("max", max);
+      map.put("min", min);
+      return map;
     }
-     int otherHistNumBuckets = otherHistogram.getNumBuckets();
-     double[] otherHistBoundaries = otherHistogram.getBoundaries();
-     double[] otherHistCounts = otherHistogram.getCounts();
-     if (numBuckets <= otherHistNumBuckets) {
-      numBuckets = otherHistNumBuckets;
-      for (int i = 0; i < numBuckets-1; i++) {
-        boundaries[i] = otherHistBoundaries[i];
-        counts[i] = otherHistCounts[i];
-      }
-      counts[numBuckets-1] = otherHistCounts[otherHistNumBuckets-1];
-     } else {
-      for (int i = 0; i < numBuckets-1; i++) {
-        boundaries[i] = otherHistBoundaries[i];
-        counts[i] = otherHistCounts[i];
-      }
-      for (int i = numBuckets-1; i < otherHistNumBuckets; i++) {
-        counts[numBuckets-1] += otherHistCounts[i];
-      }
-     } 
-   }
- 
-   /**
-    * Encode the serialized form generated by toBytes() in Base64, used as the JSON serialization format.
-    *
-    * @return Base64 serialization
-    */
-   @JsonValue
-   public String toBase64()
-   {
-     byte[] asBytes = toBytes();
-     return StringUtils.fromUtf8(StringUtils.encodeBase64(asBytes));
-   }
+    finally {
+      readWriteLock.readLock().unlock();
+    }
+  }
  
    /**
     * Serialize the histogram, with two possible encodings chosen based on the number of filled buckets:
@@ -527,18 +600,24 @@
     *
     * @param buf Destination buffer
     */
-   private void writeByteBuffer(ByteBuffer buf)
-   {
-     buf.putDouble(count);
-     buf.putInt(numBuckets);
-     buf.putDouble(max);
-     buf.putDouble(min);
- 
-     buf.asDoubleBuffer().put(boundaries);
-     buf.position(buf.position() + Double.BYTES * boundaries.length);
-     buf.asDoubleBuffer().put(counts);
-     buf.position(buf.position() + Double.BYTES * counts.length);
-   }
+  private void writeByteBuffer(ByteBuffer buf)
+  {
+    buf.putDouble(count);
+    buf.putInt(maxNumBuckets);
+    buf.putInt(numBuckets);
+    buf.putLong(missingValueCount);
+    buf.putDouble(max);
+    buf.putDouble(min);
+
+    if (boundaries != null && boundaries.length > 0) {
+      buf.asDoubleBuffer().put(boundaries);
+      buf.position(buf.position() + Double.BYTES * boundaries.length);
+    }
+    if (counts != null && counts.length > 0) {
+      buf.asDoubleBuffer().put(counts);
+      buf.position(buf.position() + Double.BYTES * counts.length);
+    }
+  }
 
    /**
     * Deserialize a Base64-encoded histogram, used when deserializing from JSON (such as when transferring query results)
@@ -574,9 +653,20 @@
   public static VariableWidthHistogram fromByteBuffer(ByteBuffer buf)
   {
     double count = buf.getDouble();
+    int maxNumBuckets = buf.getInt();
     int numBuckets = buf.getInt();
+    long missingValueCount = buf.getLong();
     double max = buf.getDouble();
     double min = buf.getDouble();
+    if (numBuckets == 0) {
+      return new VariableWidthHistogram(
+        maxNumBuckets,
+        missingValueCount,
+        count,
+        max,
+        min
+        );
+    }
     double[] boundaries = new double[numBuckets - 1];
     buf.asDoubleBuffer().get(boundaries);
     buf.position(buf.position() + Double.BYTES * boundaries.length);
@@ -584,10 +674,11 @@
     buf.asDoubleBuffer().get(counts);
     buf.position(buf.position() + Double.BYTES * counts.length);
     return new VariableWidthHistogram(
+        maxNumBuckets,
         numBuckets,
         boundaries,
         counts,
-        0,
+        missingValueCount,
         count,
         max,
         min
@@ -600,12 +691,15 @@
     * @param numBuckets number of buckets
     * @return full serialized size in bytes
     */
-   public static int getStorageSize(int numBuckets)
-   {
-     return FIXED_SIZE_FIELDS_SIZE +
-            Double.BYTES * (numBuckets - 1) +
-            Double.BYTES * numBuckets;
-   }
+  public static int getStorageSize(int numBuckets)
+  {
+    if (numBuckets == 0) {
+      return FIXED_SIZE_FIELDS_SIZE;
+    }
+    return FIXED_SIZE_FIELDS_SIZE +
+           Double.BYTES * (numBuckets - 1) +  // boundaries array
+           Double.BYTES * numBuckets;          // counts array
+  }
  
    @VisibleForTesting
    public int getNonEmptyBucketCount()

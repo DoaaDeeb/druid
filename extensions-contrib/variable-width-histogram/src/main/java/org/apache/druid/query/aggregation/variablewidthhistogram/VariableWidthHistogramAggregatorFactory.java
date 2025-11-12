@@ -26,14 +26,11 @@
  import org.apache.druid.query.aggregation.AggregateCombiner;
  import org.apache.druid.query.aggregation.Aggregator;
  import org.apache.druid.query.aggregation.AggregatorFactory;
- import org.apache.druid.query.aggregation.AggregatorUtil;
  import org.apache.druid.query.aggregation.BufferAggregator;
  import org.apache.druid.query.aggregation.ObjectAggregateCombiner;
  import org.apache.druid.query.cache.CacheKeyBuilder;
- import org.apache.druid.segment.ColumnInspector;
  import org.apache.druid.segment.ColumnSelectorFactory;
  import org.apache.druid.segment.ColumnValueSelector;
- import org.apache.druid.segment.column.ColumnCapabilities;
  import org.apache.druid.segment.column.ColumnType;
  
  import javax.annotation.Nullable;
@@ -45,23 +42,26 @@
  @JsonTypeName(VariableWidthHistogramAggregator.TYPE_NAME)
  public class VariableWidthHistogramAggregatorFactory extends AggregatorFactory
  {
+
+  // Cache type ID - temporary until contributed upstream to AggregatorUtil
+  private static final byte VARIABLE_WIDTH_HIST_CACHE_TYPE_ID = (byte) 0x51;
  
   private final String name;
   private final String fieldName;
-  private final int numBuckets;
+  private final int maxNumBuckets;
   private final boolean finalizeAsBase64Binary;
  
   @JsonCreator
   public VariableWidthHistogramAggregatorFactory(
       @JsonProperty("name") String name,
       @JsonProperty("fieldName") String fieldName,
-      @JsonProperty("numBuckets") int numBuckets,
+      @JsonProperty("maxNumBuckets") int maxNumBuckets,
       @JsonProperty("finalizeAsBase64Binary") @Nullable Boolean finalizeAsBase64Binary
-  )
+  ) 
   {
     this.name = name;
     this.fieldName = fieldName;
-    this.numBuckets = numBuckets;
+    this.maxNumBuckets = maxNumBuckets == 0 ? 10 : maxNumBuckets;
     this.finalizeAsBase64Binary = finalizeAsBase64Binary == null ? false : finalizeAsBase64Binary;
   }
  
@@ -70,7 +70,7 @@
    {
      return new VariableWidthHistogramAggregator(
          metricFactory.makeColumnValueSelector(fieldName),
-         numBuckets
+         maxNumBuckets
      );
    }
  
@@ -79,15 +79,8 @@
    {
      return new VariableWidthHistogramBufferAggregator(
          metricFactory.makeColumnValueSelector(fieldName),
-         numBuckets
+         maxNumBuckets
      );
-   }
- 
-   @Override
-   public boolean canVectorize(ColumnInspector columnInspector)
-   {
-     ColumnCapabilities capabilities = columnInspector.getColumnCapabilities(fieldName);
-     return capabilities != null && capabilities.isNumeric();
    }
  
    @Override
@@ -117,13 +110,13 @@
    {
      return new ObjectAggregateCombiner()
      {
-       private final VariableWidthHistogram combined = new VariableWidthHistogram(numBuckets);
+       private final VariableWidthHistogram combined = new VariableWidthHistogram(maxNumBuckets);
  
        @Override
        public void reset(ColumnValueSelector selector)
        {
-         combined.reset();
-         fold(selector);
+        VariableWidthHistogram first = (VariableWidthHistogram) selector.getObject();
+        combined.combineHistogram(first);
        }
  
        @Override
@@ -153,7 +146,7 @@
      return new VariableWidthHistogramAggregatorFactory(
          name,
          name,
-         numBuckets,
+         maxNumBuckets,
          finalizeAsBase64Binary
      );
    }
@@ -164,7 +157,7 @@
      return new VariableWidthHistogramAggregatorFactory(
          name,
          name,
-         numBuckets,
+         maxNumBuckets,
          finalizeAsBase64Binary
      );
    }
@@ -174,27 +167,28 @@
    {
      if (object instanceof String) {
        byte[] bytes = StringUtils.decodeBase64(StringUtils.toUtf8((String) object));
-       final VariableWidthHistogram fbh = VariableWidthHistogram.fromBytes(bytes);
-       return fbh;
+       final VariableWidthHistogram vwh = VariableWidthHistogram.fromBytes(bytes);
+       return vwh;
      } else {
        return object;
      }
    }
  
-   @Nullable
-   @Override
-   public Object finalizeComputation(@Nullable Object object)
-   {
-     if (object == null) {
-       return null;
-     }
- 
-     if (finalizeAsBase64Binary) {
-       return object;
-     } else {
-       return object.toString();
-     }
-   }
+  @Nullable
+  @Override
+  public Object finalizeComputation(@Nullable Object object)
+  {
+    if (object == null) {
+      return null;
+    }
+
+    if (finalizeAsBase64Binary) {
+      return object;
+    } else {
+      // Return a JSON-friendly Map representation instead of toString()
+      return ((VariableWidthHistogram) object).toMap();
+    }
+  }
  
    @JsonProperty
    @Override
@@ -230,7 +224,7 @@
   @Override
   public int getMaxIntermediateSize()
   {
-    return VariableWidthHistogram.getStorageSize(numBuckets);
+    return VariableWidthHistogram.getStorageSize(maxNumBuckets);
   }
  
    @Override
@@ -239,7 +233,7 @@
      return new VariableWidthHistogramAggregatorFactory(
          newName,
          getFieldName(),
-         getNumBuckets(),
+         getMaxNumBuckets(),
          isFinalizeAsBase64Binary()
      );
    }
@@ -247,7 +241,7 @@
    @Override
    public byte[] getCacheKey()
    {
-     final CacheKeyBuilder builder = new CacheKeyBuilder(AggregatorUtil.VARIABLE_WIDTH_HIST_CACHE_TYPE_ID)
+     final CacheKeyBuilder builder = new CacheKeyBuilder(VARIABLE_WIDTH_HIST_CACHE_TYPE_ID)
          .appendString(fieldName)
          .appendBoolean(finalizeAsBase64Binary);
  
@@ -261,9 +255,9 @@
    }
 
    @JsonProperty
-   public int getNumBuckets()
+   public int getMaxNumBuckets()
    {
-     return numBuckets;
+     return maxNumBuckets;
    }
 
    @JsonProperty
@@ -284,6 +278,7 @@
      VariableWidthHistogramAggregatorFactory that = (VariableWidthHistogramAggregatorFactory) o;
      return Objects.equals(getName(), that.getName()) &&
             Objects.equals(getFieldName(), that.getFieldName()) &&
+            getMaxNumBuckets() == that.getMaxNumBuckets() &&
             isFinalizeAsBase64Binary() == that.isFinalizeAsBase64Binary();
    }
  
@@ -293,6 +288,7 @@
      return Objects.hash(
          getName(),
          getFieldName(),
+         getMaxNumBuckets(),
          isFinalizeAsBase64Binary()
      );
    }
@@ -303,6 +299,7 @@
      return "VariableWidthHistogramAggregatorFactory{" +
             "name='" + name + '\'' +
             ", fieldName='" + fieldName + '\'' +
+            ", maxNumBuckets=" + maxNumBuckets +
             ", finalizeAsBase64Binary=" + finalizeAsBase64Binary +
             '}';
    }
