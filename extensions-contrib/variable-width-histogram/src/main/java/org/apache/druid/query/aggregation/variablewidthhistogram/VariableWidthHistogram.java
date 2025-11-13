@@ -312,9 +312,9 @@ public class VariableWidthHistogram
       return;
     }
 
-    log.info("[VWH-COMBINE] Before combine: this[numBuckets=%d, count=%s, min=%s, max=%s, boundaries=%s] other[numBuckets=%d, count=%s, min=%s, max=%s, boundaries=%s]",
-             numBuckets, count, min, max, Arrays.toString(boundaries),
-             otherHistogram.getNumBuckets(), otherHistogram.getCount(), otherHistogram.getMin(), otherHistogram.getMax(), Arrays.toString(otherHistogram.getBoundaries()));
+    log.info("[VWH-COMBINE] Before combine: this[numBuckets=%d, count=%s, min=%s, max=%s, missingValueCount=%d, boundaries=%s] other[numBuckets=%d, count=%s, min=%s, max=%s, missingValueCount=%d, boundaries=%s]",
+             numBuckets, count, min, max, missingValueCount, Arrays.toString(boundaries),
+             otherHistogram.getNumBuckets(), otherHistogram.getCount(), otherHistogram.getMin(), otherHistogram.getMax(), otherHistogram.getMissingValueCount(), Arrays.toString(otherHistogram.getBoundaries()));
 
     readWriteLock.writeLock().lock();
     otherHistogram.getReadWriteLock().readLock().lock();
@@ -331,8 +331,8 @@ public class VariableWidthHistogram
         combineHistogramDifferentBuckets(otherHistogram);
       }
       
-      log.info("[VWH-COMBINE] After combine: this[count=%s, min=%s, max=%s, counts=%s]",
-               count, min, max, Arrays.toString(counts));
+      log.info("[VWH-COMBINE] After combine: this[count=%s, min=%s, max=%s, missingValueCount=%d, counts=%s]",
+               count, min, max, missingValueCount, Arrays.toString(counts));
     }
     finally {
       readWriteLock.writeLock().unlock();
@@ -529,7 +529,6 @@ public class VariableWidthHistogram
    
    // Update aggregate statistics
    count = otherHistogram.getCount();
-   missingValueCount += otherHistogram.getMissingValueCount();
    max = otherHistogram.getMax();
    min = otherHistogram.getMin();
    

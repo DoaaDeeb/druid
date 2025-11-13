@@ -19,7 +19,6 @@
 
 package org.apache.druid.query.aggregation.variablewidthhistogram;
 
-import java.lang.Double;
 import org.apache.druid.java.util.common.logger.Logger;
 import org.apache.druid.query.aggregation.Aggregator;
 import org.apache.druid.segment.BaseObjectColumnValueSelector;

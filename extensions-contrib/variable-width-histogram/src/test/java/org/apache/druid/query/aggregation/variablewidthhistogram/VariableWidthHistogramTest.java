@@ -1262,5 +1262,44 @@
      ObjectStrategy<?> strategy = serde.getObjectStrategy();
      Assert.assertFalse(strategy.readRetainsBufferReference());
    }
+
+  @Test
+  public void testDecodeBase64String() throws Exception
+  {
+    String base64String = "QH1QAAAAAAAAAAAKAAAACgAAAAAAAAAAQI9AAAAAAAAAAAAAAAAAAEBZAAAAAAAAQGkAAAAAAABAcsAAAAAAAEB5AAAAAAAAQH9AAAAAAABAgsAAAAAAAECF4AAAAAAAQIkAAAAAAABAjCAAAAAAAEAsAAAAAAAAQFeAAAAAAABAUcAAAAAAAEBXwAAAAAAAQDAAAAAAAABAUgAAAAAAAEA+AAAAAAAAQECAAAAAAABAKgAAAAAAAEA/AAAAAAAA";
+    
+    // Decode the base64 string into a histogram
+    VariableWidthHistogram histogram = VariableWidthHistogram.fromBase64(base64String);
+    
+    // Print out the histogram details
+    System.out.println("=== Decoded Histogram ===");
+    System.out.println("Number of buckets: " + histogram.getNumBuckets());
+    System.out.println("Total count: " + histogram.getCount());
+    System.out.println("Min value: " + histogram.getMin());
+    System.out.println("Max value: " + histogram.getMax());
+    System.out.println("Missing value count: " + histogram.getMissingValueCount());
+    
+    System.out.println("\nBoundaries:");
+    double[] boundaries = histogram.getBoundaries();
+    for (int i = 0; i < boundaries.length; i++) {
+      System.out.println("  Boundary[" + i + "]: " + boundaries[i]);
+    }
+    
+    System.out.println("\nCounts:");
+    double[] counts = histogram.getCounts();
+    for (int i = 0; i < counts.length; i++) {
+      System.out.println("  Count[" + i + "]: " + counts[i]);
+    }
+    
+    System.out.println("\nHistogram as Map:");
+    System.out.println(histogram.toMap());
+    
+    System.out.println("\nHistogram toString:");
+    System.out.println(histogram.toString());
+    
+    // Basic assertions
+    Assert.assertNotNull(histogram);
+    Assert.assertEquals(10, histogram.getNumBuckets());
+  }
  }
  
