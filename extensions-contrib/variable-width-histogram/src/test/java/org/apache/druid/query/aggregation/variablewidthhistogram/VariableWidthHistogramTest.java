@@ -126,6 +126,7 @@
     Assert.assertEquals(130, h.getMax(), 0.01);
   }
 
+  @Test
   public void testMergeNoOverlapRightInf()
   {
     VariableWidthHistogram h = buildHistogram(
@@ -158,6 +159,7 @@
     Assert.assertEquals(Double.POSITIVE_INFINITY, h.getMax(), 0.01);
   }
 
+  @Test
   public void testMergeNoExplicitOverlapRightInf()
   {
     VariableWidthHistogram h = buildHistogram(
@@ -190,6 +192,7 @@
     Assert.assertEquals(Double.POSITIVE_INFINITY, h.getMax(), 0.01);
   }
 
+  @Test
   public void testMergeNoExplicitOverlapRightInf2()
   {
     VariableWidthHistogram h = buildHistogram(
@@ -287,6 +290,7 @@
   }
  
 
+  @Test
   public void testMergeNoExplicitOverlapLeftInf()
   {
     VariableWidthHistogram h = buildHistogram(
@@ -311,7 +315,7 @@
     h.combineHistogram(h2);
     Assert.assertEquals(6, h.getNumBuckets());
     Assert.assertArrayEquals(new double[]{30, 40, 60, 70, 100}, h.getBoundaries(), 0.01);
-    Assert.assertArrayEquals(new double[]{10, 0, 30, 10, 21, 33}, h.getCounts(), 0.01);
+    Assert.assertArrayEquals(new double[]{19, 0, 30, 10, 21, 43}, h.getCounts(), 0.01);
     Assert.assertEquals(0, h.getMissingValueCount());
     Assert.assertEquals(123, h.getCount(), 0.01);
     Assert.assertEquals(Double.NEGATIVE_INFINITY, h.getMin(), 0.01);
@@ -446,6 +450,7 @@
     Assert.assertEquals(45, h.getMax(), 0.01);
    }
  
+   @Test
    public void testMergeSameBucketsLeftOverlap2()
    {
     VariableWidthHistogram h = buildHistogram(
@@ -481,23 +486,23 @@
    public void testMergeSameBucketsLeftOverlapInf()
    {
     VariableWidthHistogram h = buildHistogram(
-      6,
-      new double[]{12, 18, 20, 32, 40},
-      new double[]{10, 2, 4, 6, 8, 10},
-      0,
-      40,
-      Double.POSITIVE_INFINITY,
-      10
-  );
-    VariableWidthHistogram h2 = buildHistogram(
-      6,
-      new double[]{4, 10, 12, 18, 20},
-      new double[]{4, 6, 8, 10, 12, 14},
-      0,
-      54,
-      32,
-      Double.NEGATIVE_INFINITY
-  );
+        6,
+        new double[]{12, 18, 20, 32, 40},
+        new double[]{10, 2, 4, 6, 8, 10},
+        0,
+        40,
+        Double.POSITIVE_INFINITY,
+        10
+    );
+      VariableWidthHistogram h2 = buildHistogram(
+        6,
+        new double[]{4, 10, 12, 18, 20},
+        new double[]{4, 6, 8, 10, 12, 14},
+        0,
+        54,
+        32,
+        Double.NEGATIVE_INFINITY
+    );
 
     h.combineHistogram(h2);
     Assert.assertEquals(6, h.getNumBuckets());
@@ -599,7 +604,7 @@
     h.combineHistogram(h2);
     Assert.assertEquals(3, h.getNumBuckets());
     Assert.assertArrayEquals(new double[]{35, 45}, h.getBoundaries(), 0.01);
-    Assert.assertArrayEquals(new double[]{17,8,23}, h.getCounts(), 0.01);
+    Assert.assertArrayEquals(new double[]{17,8,33}, h.getCounts(), 0.01);
     Assert.assertEquals(0, h.getMissingValueCount());
     Assert.assertEquals(58, h.getCount(), 0.01);
     Assert.assertEquals(5, h.getMin(), 0.01);
@@ -631,7 +636,7 @@
     h.combineHistogram(h2);
     Assert.assertEquals(3, h.getNumBuckets());
     Assert.assertArrayEquals(new double[]{35, 45}, h.getBoundaries(), 0.01);
-    Assert.assertArrayEquals(new double[]{17,8,23}, h.getCounts(), 0.01);
+    Assert.assertArrayEquals(new double[]{17,8,33}, h.getCounts(), 0.01);
     Assert.assertEquals(0, h.getMissingValueCount());
     Assert.assertEquals(58, h.getCount(), 0.01);
     Assert.assertEquals(Double.NEGATIVE_INFINITY, h.getMin(), 0.01);
@@ -667,7 +672,7 @@
     Assert.assertEquals(0, h.getMissingValueCount());
     Assert.assertEquals(52, h.getCount(), 0.01);
     Assert.assertEquals(1, h.getMin(), 0.01);
-    Assert.assertEquals(45, h.getMax(), 0.01);
+    Assert.assertEquals(32, h.getMax(), 0.01);
    }
 
    @Test
@@ -1014,7 +1019,7 @@
   );
 
     h.combineHistogram(h2);
-    Assert.assertEquals(10, h.getNumBuckets());
+    Assert.assertEquals(5, h.getNumBuckets());
     Assert.assertArrayEquals(new double[]{14, 15, 18, 19}, h.getBoundaries(), 0.01);
     Assert.assertArrayEquals(new double[]{8, 2, 6, 2, 12}, h.getCounts(), 0.01);
     Assert.assertEquals(0, h.getMissingValueCount());
@@ -1046,7 +1051,7 @@
   );
 
     h.combineHistogram(h2);
-    Assert.assertEquals(10, h.getNumBuckets());
+    Assert.assertEquals(5, h.getNumBuckets());
     Assert.assertArrayEquals(new double[]{14, 15, 18, 19}, h.getBoundaries(), 0.01);
     Assert.assertArrayEquals(new double[]{8, 2, 6, 2, 12}, h.getCounts(), 0.01);
     Assert.assertEquals(0, h.getMissingValueCount());

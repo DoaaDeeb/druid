@@ -377,7 +377,7 @@ public class VariableWidthHistogram
       mergeZeroBuckets(otherHistogram);
      return;
     }
-    // simpleInterpolateMerge(otherHistogram);
+    simpleInterpolateMerge(otherHistogram);
    }
  
    /**
@@ -418,6 +418,38 @@ public class VariableWidthHistogram
     double upperBound, lowerBound, otherUpperBound, otherLowerBound;
     double overlap, bucketWidth, overlapProportion = 0;
 
+    lowerBound = (i == 0) ? min : boundaries[i - 1];
+    upperBound = (i == numBuckets - 1) ? max : boundaries[i];
+    otherLowerBound = (j == 0) ? otherMin : otherBoundaries[j - 1];
+    otherUpperBound = (j == otherNumBuckets - 1) ? otherMax : otherBoundaries[j];
+
+    while (otherLowerBound < lowerBound && j < otherNumBuckets) {
+      double nonOverlap = Math.min(lowerBound, otherUpperBound) - otherLowerBound;
+      double nonOverlapProportion = nonOverlap / (otherUpperBound - otherLowerBound);
+
+      log.info("nonOverlap=%f, nonOverlapProportion=%f", nonOverlap, nonOverlapProportion);
+
+      if (otherLowerBound == Double.NEGATIVE_INFINITY) {
+        counts[i] += otherCounts[j];
+      } else {
+      counts[i] += otherCounts[j] * nonOverlapProportion;
+      }
+
+      if (nonOverlapProportion < 1) {
+        break;
+      }
+      j++;
+
+      if (j >= otherNumBuckets) {
+        break;
+      }
+      otherLowerBound = (j == 0) ? otherMin : otherBoundaries[j - 1];
+      otherUpperBound = (j == otherNumBuckets - 1) ? otherMax : otherBoundaries[j];
+
+      log.info("otherCounts[j]=%f, counts[i]=%f", otherCounts[j], counts[i]);
+    }
+
+
     while (i < numBuckets && j < otherNumBuckets) {
       lowerBound = (i == 0) ? min : boundaries[i - 1];
       upperBound = (i == numBuckets - 1) ? max : boundaries[i];
@@ -432,12 +464,28 @@ public class VariableWidthHistogram
                i, j, upperBound, lowerBound, otherUpperBound, otherLowerBound,
                overlap, bucketWidth, overlapProportion);
 
-      if ((overlap  == Double.POSITIVE_INFINITY && bucketWidth == Double.POSITIVE_INFINITY) 
-       || (overlap  == Double.NEGATIVE_INFINITY && bucketWidth == Double.NEGATIVE_INFINITY)) {
+      if ((overlap  == Double.POSITIVE_INFINITY && bucketWidth == Double.POSITIVE_INFINITY)) {
+      //  || (overlap  == Double.NEGATIVE_INFINITY && bucketWidth == Double.NEGATIVE_INFINITY)) {
         counts[i] += otherCounts[j];
+        overlapProportion = 1;
       } else if (overlapProportion > 0) {
         counts[i] += otherCounts[j] * overlapProportion;
+      } 
+      // else if (overlap <= 0 && otherUpperBound < upperBound && i == 0) {
+      //   counts[i] += otherCounts[j];
+      // }
+
+      while (otherLowerBound < lowerBound && overlap <= 0 && i == 0 && j < otherNumBuckets) {
+        counts[i] += otherCounts[j];
+        j++;
+        otherLowerBound = (j == 0) ? otherMin : otherBoundaries[j - 1];
+        otherUpperBound = (j == otherNumBuckets - 1) ? otherMax : otherBoundaries[j];
+
+        overlap = Math.min(upperBound, otherUpperBound) - Math.max(lowerBound, otherLowerBound);
       }
+      
+
+      log.info("otherCounts[j]=%f, counts[i]=%f", otherCounts[j], counts[i]);
 
       if (otherUpperBound < upperBound) {
         j++;
@@ -457,14 +505,14 @@ public class VariableWidthHistogram
       j++;
     }
 
-    if (i < numBuckets) {
-      log.info("Adding remaining bucket from this histogram: i=%d, count=%f", i, counts[i]);
-      for (int k = 0; k < otherNumBuckets; k++) {
-        log.info("Adding bucket from other histogram: k=%d, count=%f", k, otherCounts[k]);
-        counts[i] += otherCounts[k];
-      }
+    // if (i < numBuckets) {
+    //   log.info("Adding remaining bucket from this histogram: i=%d, count=%f", i, counts[i]);
+    //   for (int k = 0; k < otherNumBuckets; k++) {
+    //     log.info("Adding bucket from other histogram: k=%d, count=%f", k, otherCounts[k]);
+    //     counts[i] += otherCounts[k];
+    //   }
       
-    }
+    // }
 
     // if (j < otherNumBuckets) {
     //   // Other histogram is entirely to the RIGHT - add remaining buckets to the LAST bucket
