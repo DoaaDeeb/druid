@@ -258,6 +258,134 @@
   }
   
   @Test
+  public void testMergeNoOverlapLeft2()
+  {
+    VariableWidthHistogram h = buildHistogram(
+      6,
+      new double[]{30, 40, 60, 70, 100},
+      new double[]{10, 0, 30, 10, 21, 33},
+      0,
+      104,
+      130,
+      25
+  );
+    VariableWidthHistogram h2 = buildHistogram(
+        6,
+        new double[]{4, 10, 12, 18, 20},
+        new double[]{3, 1, 2, 2, 1, 10},
+        0,
+        19,
+        25,
+        1
+    );
+
+    h.combineHistogram(h2);
+    Assert.assertEquals(6, h.getNumBuckets());
+    Assert.assertArrayEquals(new double[]{30, 40, 60, 70, 100}, h.getBoundaries(), 0.01);
+    Assert.assertArrayEquals(new double[]{29, 0, 30, 10, 21, 33}, h.getCounts(), 0.01);
+    Assert.assertEquals(0, h.getMissingValueCount());
+    Assert.assertEquals(123, h.getCount(), 0.01);
+    Assert.assertEquals(1, h.getMin(), 0.01);
+    Assert.assertEquals(130, h.getMax(), 0.01);
+  }
+
+  @Test
+  public void testMergeOverlapLeft()
+  {
+    VariableWidthHistogram h = buildHistogram(
+      6,
+      new double[]{30, 40, 60, 70, 100},
+      new double[]{10, 0, 30, 10, 21, 33},
+      0,
+      104,
+      130,
+      23
+  );
+    VariableWidthHistogram h2 = buildHistogram(
+        6,
+        new double[]{4, 10, 12, 18, 20},
+        new double[]{3, 1, 2, 2, 1, 10},
+        0,
+        19,
+        25,
+        1
+    );
+
+    h.combineHistogram(h2);
+    Assert.assertEquals(6, h.getNumBuckets());
+    Assert.assertArrayEquals(new double[]{30, 40, 60, 70, 100}, h.getBoundaries(), 0.01);
+    Assert.assertArrayEquals(new double[]{29, 0, 30, 10, 21, 33}, h.getCounts(), 0.01);
+    Assert.assertEquals(0, h.getMissingValueCount());
+    Assert.assertEquals(123, h.getCount(), 0.01);
+    Assert.assertEquals(1, h.getMin(), 0.01);
+    Assert.assertEquals(130, h.getMax(), 0.01);
+  }
+
+  @Test
+  public void testMergeOverlapLeft2()
+  {
+    VariableWidthHistogram h = buildHistogram(
+      6,
+      new double[]{30, 40, 60, 70, 100},
+      new double[]{10, 0, 30, 10, 21, 33},
+      0,
+      104,
+      130,
+      20
+  );
+    VariableWidthHistogram h2 = buildHistogram(
+        6,
+        new double[]{4, 10, 12, 18, 20},
+        new double[]{3, 1, 2, 2, 1, 10},
+        0,
+        19,
+        30,
+        1
+    );
+
+    h.combineHistogram(h2);
+    Assert.assertEquals(6, h.getNumBuckets());
+    Assert.assertArrayEquals(new double[]{30, 40, 60, 70, 100}, h.getBoundaries(), 0.01);
+    Assert.assertArrayEquals(new double[]{29, 0, 30, 10, 21, 33}, h.getCounts(), 0.01);
+    Assert.assertEquals(0, h.getMissingValueCount());
+    Assert.assertEquals(123, h.getCount(), 0.01);
+    Assert.assertEquals(1, h.getMin(), 0.01);
+    Assert.assertEquals(130, h.getMax(), 0.01);
+  }
+
+  @Test
+  public void testMergeOverlapLeft3()
+  {
+    VariableWidthHistogram h = buildHistogram(
+      6,
+      new double[]{30, 40, 60, 70, 100},
+      new double[]{10, 0, 30, 10, 21, 33},
+      0,
+      104,
+      130,
+      20
+  );
+    VariableWidthHistogram h2 = buildHistogram(
+        6,
+        new double[]{4, 10, 12, 18, 20},
+        new double[]{3, 1, 2, 2, 1, 10},
+        0,
+        19,
+        30,
+        1
+    );
+
+    h.combineHistogram(h2);
+    Assert.assertEquals(6, h.getNumBuckets());
+    Assert.assertArrayEquals(new double[]{30, 40, 60, 70, 100}, h.getBoundaries(), 0.01);
+    Assert.assertArrayEquals(new double[]{29, 0, 30, 10, 21, 33}, h.getCounts(), 0.01);
+    Assert.assertEquals(0, h.getMissingValueCount());
+    Assert.assertEquals(123, h.getCount(), 0.01);
+    Assert.assertEquals(1, h.getMin(), 0.01);
+    Assert.assertEquals(130, h.getMax(), 0.01);
+  }
+  
+  @Test
   public void testMergeNoOverlapLeftInf()
   {
     VariableWidthHistogram h = buildHistogram(

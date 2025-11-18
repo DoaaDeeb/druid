@@ -42,6 +42,10 @@ public class VariableWidthHistogramDruidModule implements DruidModule
             new NamedType(
                 VariableWidthHistogramAggregatorFactory.class,
                 VariableWidthHistogramAggregator.TYPE_NAME
+            ),
+            new NamedType(
+                CountPostAggregator.class,
+                "count"
             )
         )
     );
