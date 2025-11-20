@@ -148,6 +148,17 @@
         40,
         5
     );
+
+    VariableWidthHistogram hResult = buildHistogram(
+        5,
+        new double[]{10, 20, 30, 40},
+        new double[]{2, 3, 1, 3, 1},
+        0,
+        10,
+        45,
+        2
+    );
+
     VariableWidthHistogram[] histograms = {h1, h2};
 
     final TestObjectColumnSelector<VariableWidthHistogram> selector = new TestObjectColumnSelector<>(histograms);
@@ -174,20 +185,19 @@
        agg.aggregate();
        selector.increment();
      }
- 
-    Object finalizedObjectHumanReadable = humanReadableFactory.finalizeComputation(agg.get());
-    String finalStringHumanReadable = objectMapper.writeValueAsString(finalizedObjectHumanReadable);
-    Assert.assertEquals(
-        "{\"numBuckets\":5,\"boundaries\":[10.0,20.0,30.0,40.0],\"counts\":[2.0,3.0,1.0,3.0,1.0],\"missingValueCount\":0,\"count\":10.0,\"max\":45.0,\"min\":2.0}",
-        finalStringHumanReadable
-    );
 
-    Object finalizedObjectBinary = binaryFactory.finalizeComputation(agg.get());
-    String finalStringBinary = objectMapper.writeValueAsString(finalizedObjectBinary);
-    Assert.assertEquals(
-        "\"QCQAAAAAAAAAAAAFAAAABQAAAAAAAAAAQEaAAAAAAABAAAAAAAAAAEAkAAAAAAAAQDQAAAAAAABAPgAAAAAAAEBEAAAAAAAAQAAAAAAAAABACAAAAAAAAD/wAAAAAAAAQAgAAAAAAAA/8AAAAAAAAA==\"",
-        finalStringBinary
-    );
+   
+   // Compare against expected result histogram
+   Object finalizedObjectHumanReadable = humanReadableFactory.finalizeComputation(agg.get());
+   String finalStringHumanReadable = objectMapper.writeValueAsString(finalizedObjectHumanReadable);
+   String expectedHumanReadable = objectMapper.writeValueAsString(hResult.toMap());
+   Assert.assertEquals(expectedHumanReadable, finalStringHumanReadable);
+
+   // For binary format, compare the Base64 string against the expected result
+   Object finalizedObjectBinary = binaryFactory.finalizeComputation(agg.get());
+   String finalStringBinary = objectMapper.writeValueAsString(finalizedObjectBinary);
+   String expectedBinary = objectMapper.writeValueAsString(hResult.toBase64Proto());
+   Assert.assertEquals(expectedBinary, finalStringBinary);
 
    }
  

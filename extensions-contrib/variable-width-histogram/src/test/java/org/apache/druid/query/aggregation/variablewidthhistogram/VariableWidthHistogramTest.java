@@ -1210,7 +1210,7 @@
       1
   );
 
-    h.combine(h2.toBase64());
+    h.combine(h2.toBase64Proto());
     Assert.assertEquals(6, h.getNumBuckets());
     Assert.assertArrayEquals(new double[]{2, 5, 7, 10, 15}, h.getBoundaries(), 0.01);
     Assert.assertArrayEquals(new double[]{2, 6, 4, 6, 10, 14}, h.getCounts(), 0.01);
@@ -1378,13 +1378,13 @@
        30,
        1
     );
-    byte[] bytes = h.toBytes();
-    String asBase64 = h.toBase64();
+    byte[] bytes = h.toBytesProto();
+    String asBase64 = h.toBase64Proto();
 
-    VariableWidthHistogram fromBytes = VariableWidthHistogram.fromBytes(bytes);
+    VariableWidthHistogram fromBytes = VariableWidthHistogram.fromBytesProto(bytes);
     Assert.assertEquals(h, fromBytes);
 
-    VariableWidthHistogram fromBase64 = VariableWidthHistogram.fromBase64(asBase64);
+    VariableWidthHistogram fromBase64 = VariableWidthHistogram.fromBase64Proto(asBase64);
     Assert.assertEquals(h, fromBase64);
   }
 
@@ -1399,10 +1399,10 @@
   @Test
   public void testDecodeBase64String() throws Exception
   {
-    String base64String = "QH1QAAAAAAAAAAAKAAAACgAAAAAAAAAAQI9AAAAAAAAAAAAAAAAAAEBZAAAAAAAAQGkAAAAAAABAcsAAAAAAAEB5AAAAAAAAQH9AAAAAAABAgsAAAAAAAECF4AAAAAAAQIkAAAAAAABAjCAAAAAAAEAsAAAAAAAAQFeAAAAAAABAUcAAAAAAAEBXwAAAAAAAQDAAAAAAAABAUgAAAAAAAEA+AAAAAAAAQECAAAAAAABAKgAAAAAAAEA/AAAAAAAA";
+    String base64String = "CAoQChpIAAAAAAAA8D8AAAAAAAAAQAAAAAAAAAhAAAAAAAAAEEAAAAAAAAAUQAAAAAAAABhAAAAAAAAAHEAAAAAAAAAgQAAAAAAAACJAIlAAAAAAAADwPwAAAAAAAABAAAAAAAAACEAAAAAAAAAQQAAAAAAAABRAAAAAAAAAGEAAAAAAAAAcQAAAAAAAACBAAAAAAAAAIkAAAAAAAAA+QDEAAAAAAMBSQDkAAAAAAABJQA==";
     
     // Decode the base64 string into a histogram
-    VariableWidthHistogram histogram = VariableWidthHistogram.fromBase64(base64String);
+    VariableWidthHistogram histogram = VariableWidthHistogram.fromBase64Proto(base64String);
     
     // Print out the histogram details
     System.out.println("=== Decoded Histogram ===");

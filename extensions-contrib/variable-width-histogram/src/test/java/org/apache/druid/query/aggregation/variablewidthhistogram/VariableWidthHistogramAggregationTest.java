@@ -232,7 +232,7 @@ public class VariableWidthHistogramAggregationTest extends InitializedNullHandli
       
       // Create histogram programmatically
       VariableWidthHistogram histogram = createHistogram(histogramData[i]);
-      String base64Histogram = histogram.toBase64();
+      String base64Histogram = histogram.toBase64Proto();
       
       jsonData.append(StringUtils.format(
           "{\"timestamp\":\"%s\",\"d1\":\"%s\",\"d2\":\"%s\",\"d3\":\"%s\",\"d4\":\"%s\",\"index_vwh\":\"%s\"}\n",

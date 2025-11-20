@@ -80,22 +80,15 @@ public class VariableWidthHistogramSerde extends ComplexMetricSerde
         VariableWidthHistogramAggregatorFactory aggregatorFactory = (VariableWidthHistogramAggregatorFactory) agg;
 
         if (rawValue == null) {
-          log.info("[VWH-SERDE] extractValue: rawValue is null for metric=%s, creating empty histogram", metricName);
           VariableWidthHistogram vwh = new VariableWidthHistogram(aggregatorFactory.getMaxNumBuckets());
           vwh.incrementMissing();
           return vwh;
         } else if (rawValue instanceof VariableWidthHistogram) {
-          log.info("[VWH-SERDE] extractValue: rawValue is already VariableWidthHistogram for metric=%s, count=%s", 
-                   metricName, ((VariableWidthHistogram) rawValue).getCount());
           return (VariableWidthHistogram) rawValue;
         } else if (rawValue instanceof String) {
           try {
            String base64Str = (String) rawValue;
-           log.info("[VWH-SERDE] extractValue: parsing base64 string for metric=%s, length=%d, preview=%s", 
-                    metricName, base64Str.length(), base64Str.substring(0, Math.min(50, base64Str.length())));
-           VariableWidthHistogram vwh = VariableWidthHistogram.fromBase64(base64Str);
-           log.info("[VWH-SERDE] extractValue: parsed histogram for metric=%s, numBuckets=%d, count=%s, min=%s, max=%s", 
-                    metricName, vwh.getNumBuckets(), vwh.getCount(), vwh.getMin(), vwh.getMax());
+           VariableWidthHistogram vwh = VariableWidthHistogram.fromBase64Proto(base64Str);
            return vwh;
          } catch (ParseException pe) {
            throw new ISE("Failed to parse histogram from base64 string: %s", rawValue);
@@ -119,23 +112,25 @@ public class VariableWidthHistogramSerde extends ComplexMetricSerde
          return VariableWidthHistogram.class;
        }
  
-       @Override
-       public VariableWidthHistogram fromByteBuffer(ByteBuffer buffer, int numBytes)
-       {
-         buffer.limit(buffer.position() + numBytes);
-         VariableWidthHistogram vwh = VariableWidthHistogram.fromByteBuffer(buffer);
-         return vwh;
-       }
- 
-       @Override
-       public byte[] toBytes(VariableWidthHistogram h)
-       {
-         if (h == null) {
-           return new byte[]{};
-         }
- 
-         return h.toBytes();
-       }
+      @Override
+      public VariableWidthHistogram fromByteBuffer(ByteBuffer buffer, int numBytes)
+      {
+        buffer.limit(buffer.position() + numBytes);
+        // Use protobuf format (matching BufferAggregator)
+        VariableWidthHistogram vwh = VariableWidthHistogram.fromByteBufferProto(buffer, numBytes);
+        return vwh;
+      }
+
+      @Override
+      public byte[] toBytes(VariableWidthHistogram h)
+      {
+        if (h == null) {
+          return new byte[]{};
+        }
+
+        // Use protobuf format
+        return h.toBytesProto();
+      }
  
        @Override
        public int compare(VariableWidthHistogram o1, VariableWidthHistogram o2)

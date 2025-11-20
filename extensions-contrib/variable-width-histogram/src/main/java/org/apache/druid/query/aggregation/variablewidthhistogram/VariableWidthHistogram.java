@@ -25,7 +25,6 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.druid.java.util.common.ISE;
 import org.apache.druid.java.util.common.StringUtils;
-import org.apache.druid.java.util.common.logger.Logger;
 
 import javax.annotation.Nullable;
 import java.nio.ByteBuffer;
@@ -37,10 +36,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class VariableWidthHistogram
 {
-  private static final Logger log = new Logger(VariableWidthHistogram.class);
-  
-  public static final byte SERIALIZATION_VERSION = 0x01;
- 
    /**
     * Serialization header format:
     *
@@ -164,6 +159,12 @@ public class VariableWidthHistogram
   public double[] getCounts()
   {
     return counts;
+  }
+
+  @JsonProperty
+  public int getMaxNumBuckets()
+  {
+    return maxNumBuckets;
   }
  
    @JsonProperty
@@ -290,7 +291,7 @@ public class VariableWidthHistogram
      if (val == null) {
        incrementMissing();
      } else if (val instanceof String) {
-       combineHistogram(fromBase64((String) val));
+       combineHistogram(fromBase64Proto((String) val));
      } else if (val instanceof VariableWidthHistogram) {
        combineHistogram((VariableWidthHistogram) val);
      } else {
@@ -308,13 +309,8 @@ public class VariableWidthHistogram
   public void combineHistogram(VariableWidthHistogram otherHistogram)
   {
     if (otherHistogram == null) {
-      log.info("[VWH-COMBINE] combineHistogram called with null otherHistogram");
       return;
     }
-
-    log.info("[VWH-COMBINE] Before combine: this[numBuckets=%d, count=%s, min=%s, max=%s, missingValueCount=%d, boundaries=%s] other[numBuckets=%d, count=%s, min=%s, max=%s, missingValueCount=%d, boundaries=%s]",
-             numBuckets, count, min, max, missingValueCount, Arrays.toString(boundaries),
-             otherHistogram.getNumBuckets(), otherHistogram.getCount(), otherHistogram.getMin(), otherHistogram.getMax(), otherHistogram.getMissingValueCount(), Arrays.toString(otherHistogram.getBoundaries()));
 
     readWriteLock.writeLock().lock();
     otherHistogram.getReadWriteLock().readLock().lock();
@@ -324,15 +320,10 @@ public class VariableWidthHistogram
 
       if (numBuckets == otherHistogram.getNumBuckets() &&
           Arrays.equals(boundaries, otherHistogram.getBoundaries())) {
-        log.info("[VWH-COMBINE] Using combineHistogramSameBuckets");
         combineHistogramSameBuckets(otherHistogram);
       } else {
-        log.info("[VWH-COMBINE] Using combineHistogramDifferentBuckets");
         combineHistogramDifferentBuckets(otherHistogram);
       }
-      
-      log.info("[VWH-COMBINE] After combine: this[count=%s, min=%s, max=%s, missingValueCount=%d, counts=%s]",
-               count, min, max, missingValueCount, Arrays.toString(counts));
     }
     finally {
       readWriteLock.writeLock().unlock();
@@ -427,8 +418,6 @@ public class VariableWidthHistogram
       double nonOverlap = Math.min(lowerBound, otherUpperBound) - otherLowerBound;
       double nonOverlapProportion = nonOverlap / (otherUpperBound - otherLowerBound);
 
-      log.info("nonOverlap=%f, nonOverlapProportion=%f", nonOverlap, nonOverlapProportion);
-
       if (otherLowerBound == Double.NEGATIVE_INFINITY) {
         counts[i] += otherCounts[j];
       } else {
@@ -445,8 +434,6 @@ public class VariableWidthHistogram
       }
       otherLowerBound = (j == 0) ? otherMin : otherBoundaries[j - 1];
       otherUpperBound = (j == otherNumBuckets - 1) ? otherMax : otherBoundaries[j];
-
-      log.info("otherCounts[j]=%f, counts[i]=%f", otherCounts[j], counts[i]);
     }
 
 
@@ -459,10 +446,6 @@ public class VariableWidthHistogram
       overlap = Math.min(upperBound, otherUpperBound) - Math.max(lowerBound, otherLowerBound);
       bucketWidth = otherUpperBound - otherLowerBound;
       overlapProportion = overlap / bucketWidth;
-
-      log.info("i=%d, j=%d: [%f,%f] x [%f,%f] -> overlap=%f, width=%f, prop=%f",
-               i, j, upperBound, lowerBound, otherUpperBound, otherLowerBound,
-               overlap, bucketWidth, overlapProportion);
 
       if ((overlap  == Double.POSITIVE_INFINITY && bucketWidth == Double.POSITIVE_INFINITY)) {
       //  || (overlap  == Double.NEGATIVE_INFINITY && bucketWidth == Double.NEGATIVE_INFINITY)) {
@@ -483,9 +466,6 @@ public class VariableWidthHistogram
 
         overlap = Math.min(upperBound, otherUpperBound) - Math.max(lowerBound, otherLowerBound);
       }
-      
-
-      log.info("otherCounts[j]=%f, counts[i]=%f", otherCounts[j], counts[i]);
 
       if (otherUpperBound < upperBound) {
         j++;
@@ -495,7 +475,6 @@ public class VariableWidthHistogram
     }
 
     while (j < otherNumBuckets) {
-      log.info("Adding remaining bucket from other histogram: j=%d, otherCount=%f, count=%f", j, otherCounts[j], counts[numBuckets - 1]);
       if (overlapProportion > 0) {
         counts[numBuckets - 1] += otherCounts[j] * (1 - overlapProportion);
         overlapProportion = 0;
@@ -544,16 +523,9 @@ public class VariableWidthHistogram
 
  private void mergeZeroBuckets(VariableWidthHistogram otherHistogram)
  {
-   log.info("[VWH-MERGE-ZERO] mergeBoundariesAllZero called: this.boundaries=%s, other.boundaries=%s",
-            Arrays.toString(boundaries), Arrays.toString(otherHistogram.getBoundaries()));
-   
   if (otherHistogram.getNumBuckets() == 0) {
-    log.info("[VWH-MERGE-ZERO] other histogram also has all-zero boundaries, returning");
     return;
   }
-  
-   log.info("[VWH-MERGE-ZERO] Copying from other histogram: numBuckets=%d->%d",
-            numBuckets, otherHistogram.getNumBuckets());
    
    int otherNumBuckets = otherHistogram.getNumBuckets();
    double[] otherBoundaries = otherHistogram.getBoundaries();
@@ -579,20 +551,17 @@ public class VariableWidthHistogram
    count = otherHistogram.getCount();
    max = otherHistogram.getMax();
    min = otherHistogram.getMin();
-   
-   log.info("[VWH-MERGE-ZERO] After merge: boundaries=%s, counts=%s, count=%s, min=%s, max=%s",
-            Arrays.toString(boundaries), Arrays.toString(counts), count, min, max);
  }
  
   /**
-   * Encode the serialized form generated by toBytes() in Base64, used as the JSON serialization format.
+   * Encode the serialized form generated by toBytesProto() in Base64, used as the JSON serialization format.
    *
    * @return Base64 serialization
    */
   @JsonValue
-  public String toBase64()
+  public String toBase64Proto()
   {
-    byte[] asBytes = toBytes();
+    byte[] asBytes = toBytesProto();
     return StringUtils.fromUtf8(StringUtils.encodeBase64(asBytes));
   }
 
@@ -622,10 +591,8 @@ public class VariableWidthHistogram
   }
  
    /**
-    * Serialize the histogram, with two possible encodings chosen based on the number of filled buckets:
+    * Serialize the histogram using binary format
     *
-    * Full: Store the histogram buckets as an array of bucket counts, with size numBuckets
-    * Sparse: Store the histogram buckets as a list of (bucketNum, count) pairs.
     */
    public byte[] toBytes()
    {
@@ -636,6 +603,22 @@ public class VariableWidthHistogram
         ByteBuffer buf = ByteBuffer.allocate(size);
         writeByteBuffer(buf);
         return buf.array();
+     }
+     finally {
+       readWriteLock.readLock().unlock();
+     }
+   }
+
+    /**
+    * Serialize the histogram using protobuf format
+    *
+    */
+   public byte[] toBytesProto()
+   {
+     readWriteLock.readLock().lock();
+ 
+     try {
+        return VariableWidthHistogramProtoUtils.toBytes(this);
      }
      finally {
        readWriteLock.readLock().unlock();
@@ -666,21 +649,21 @@ public class VariableWidthHistogram
     }
   }
 
-   /**
+  /**
     * Deserialize a Base64-encoded histogram, used when deserializing from JSON (such as when transferring query results)
     * or when ingesting a pre-computed histogram.
     *
     * @param encodedHistogram Base64-encoded histogram
     * @return Deserialized object
     */
-   public static VariableWidthHistogram fromBase64(String encodedHistogram)
+   public static VariableWidthHistogram fromBase64Proto(String encodedHistogram)
    {
      byte[] asBytes = StringUtils.decodeBase64(encodedHistogram.getBytes(StandardCharsets.UTF_8));
-     return fromBytes(asBytes);
+     return fromBytesProto(asBytes);
    }
  
    /**
-    * General deserialization method for VariableWidthHistogram.
+    * General deserialization method for VariableWidthHistogram using binary format.
     *
     * @param bytes
     * @return
@@ -689,6 +672,11 @@ public class VariableWidthHistogram
    {
      ByteBuffer buf = ByteBuffer.wrap(bytes);
      return fromByteBuffer(buf);
+   }
+
+   public static VariableWidthHistogram fromBytesProto(byte[] bytes)
+   {
+     return VariableWidthHistogramProtoUtils.fromBytes(bytes);
    }
  
    /**
@@ -732,8 +720,13 @@ public class VariableWidthHistogram
     );
   }
  
+  public static VariableWidthHistogram fromByteBufferProto(ByteBuffer buf, int numBytes)
+  {
+    return VariableWidthHistogramProtoUtils.fromByteBuffer(buf, numBytes);
+  }
+ 
    /**
-    * Compute the size in bytes of a full-encoding serialized histogram, without the serialization header
+    * Compute the size in bytes of histogram for binary format
     *
     * @param numBuckets number of buckets
     * @return full serialized size in bytes

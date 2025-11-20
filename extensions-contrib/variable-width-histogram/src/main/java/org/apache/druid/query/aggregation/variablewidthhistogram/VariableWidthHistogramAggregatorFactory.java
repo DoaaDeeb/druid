@@ -167,7 +167,7 @@
    {
      if (object instanceof String) {
        byte[] bytes = StringUtils.decodeBase64(StringUtils.toUtf8((String) object));
-       final VariableWidthHistogram vwh = VariableWidthHistogram.fromBytes(bytes);
+       final VariableWidthHistogram vwh = VariableWidthHistogram.fromBytesProto(bytes);
        return vwh;
      } else {
        return object;
