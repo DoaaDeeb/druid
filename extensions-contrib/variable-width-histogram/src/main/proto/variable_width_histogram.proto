@@ -31,7 +31,7 @@ message VariableWidthHistogram {
   repeated double counts = 4;
   int64 missing_value_count = 5;
   double count = 6;
-  double max = 7;
-  double min = 8;
+  optional double max = 7;
+  optional double min = 8;
 }
 

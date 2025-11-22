@@ -25,6 +25,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.druid.java.util.common.ISE;
 import org.apache.druid.java.util.common.StringUtils;
+import org.apache.druid.java.util.common.logger.Logger;
+import org.apache.druid.java.util.common.parsers.ParseException;
 
 import javax.annotation.Nullable;
 import java.nio.ByteBuffer;
@@ -36,6 +38,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class VariableWidthHistogram
 {
+  private static final Logger log = new Logger(VariableWidthHistogram.class);
+
    /**
     * Serialization header format:
     *
@@ -85,8 +89,8 @@ public class VariableWidthHistogram
    private double[] counts;
    private long missingValueCount = 0;
    private double count = 0;
-   private double max = Double.NEGATIVE_INFINITY;
-   private double min = Double.POSITIVE_INFINITY;
+   private double max = Double.POSITIVE_INFINITY;
+   private double min = Double.NEGATIVE_INFINITY;
  
    public VariableWidthHistogram(int maxNumBuckets)
    {
@@ -122,6 +126,17 @@ public class VariableWidthHistogram
     double min
    )
    {
+    
+    if (max <= min) {
+      log.warn("Invalid histogram: max [%s] must be greater than min [%s]. Throwing away row.", max, min);
+      throw new ParseException(
+          null,
+          "Invalid histogram: max [%s] must be greater than min [%s]",
+          max,
+          min
+      );
+    }
+    
      this.maxNumBuckets = maxNumBuckets;
      this.numBuckets = numBuckets;
      this.missingValueCount = missingValueCount;

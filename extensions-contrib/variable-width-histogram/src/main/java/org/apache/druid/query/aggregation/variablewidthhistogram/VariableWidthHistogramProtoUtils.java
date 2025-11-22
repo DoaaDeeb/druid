@@ -91,6 +91,9 @@ public class VariableWidthHistogramProtoUtils
       counts[i] = proto.getCounts(i);
     }
 
+    double max = proto.hasMax() ? proto.getMax() : Double.POSITIVE_INFINITY;
+    double min = proto.hasMin() ? proto.getMin() : Double.NEGATIVE_INFINITY;
+
     return new VariableWidthHistogram(
         maxNumBuckets,  // maxNumBuckets comes first in constructor
         numBuckets,     // numBuckets comes second
@@ -98,8 +101,8 @@ public class VariableWidthHistogramProtoUtils
         counts,
         proto.getMissingValueCount(),
         proto.getCount(),
-        proto.getMax(),
-        proto.getMin()
+        max,
+        min
     );
   }
 

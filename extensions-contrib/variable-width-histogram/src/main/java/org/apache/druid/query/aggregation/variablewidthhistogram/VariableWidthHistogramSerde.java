@@ -21,9 +21,7 @@ package org.apache.druid.query.aggregation.variablewidthhistogram;
 
 import com.google.common.collect.Ordering;
 import org.apache.druid.data.input.InputRow;
-import org.apache.druid.java.util.common.ISE;
 import org.apache.druid.java.util.common.logger.Logger;
-import org.apache.druid.java.util.common.parsers.ParseException;
 import org.apache.druid.query.aggregation.AggregatorFactory;
 import org.apache.druid.segment.data.ObjectStrategy;
 import org.apache.druid.segment.serde.ComplexMetricExtractor;
@@ -86,13 +84,10 @@ public class VariableWidthHistogramSerde extends ComplexMetricSerde
         } else if (rawValue instanceof VariableWidthHistogram) {
           return (VariableWidthHistogram) rawValue;
         } else if (rawValue instanceof String) {
-          try {
-           String base64Str = (String) rawValue;
-           VariableWidthHistogram vwh = VariableWidthHistogram.fromBase64Proto(base64Str);
-           return vwh;
-         } catch (ParseException pe) {
-           throw new ISE("Failed to parse histogram from base64 string: %s", rawValue);
-         }
+          // Let ParseException propagate to mark row as thrown away
+          String base64Str = (String) rawValue;
+          VariableWidthHistogram vwh = VariableWidthHistogram.fromBase64Proto(base64Str);
+          return vwh;
        } else {
          log.warn("[VWH-SERDE] extractValue: Unknown type for metric=%s: %s", metricName, rawValue.getClass());
          throw new UnsupportedOperationException("Unknown type: " + rawValue.getClass());

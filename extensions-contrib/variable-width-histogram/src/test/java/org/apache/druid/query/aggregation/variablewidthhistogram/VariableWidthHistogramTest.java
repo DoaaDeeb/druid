@@ -1434,5 +1434,50 @@
     Assert.assertNotNull(histogram);
     Assert.assertEquals(10, histogram.getNumBuckets());
   }
- }
+
+  @Test(expected = org.apache.druid.java.util.common.parsers.ParseException.class)
+  public void testConstructorWithMinEqualToMax()
+  {
+    // Test that constructor throws ParseException when min equals max
+    buildHistogram(
+        6,
+        new double[]{4, 10, 12, 18, 20},
+        new double[]{3, 1, 2, 2, 1, 10},
+        0,
+        15,
+        10, // max
+        10  // min (equal to max)
+    );
+  }
+
+  @Test(expected = org.apache.druid.java.util.common.parsers.ParseException.class)
+  public void testConstructorWithMinGreaterThanMax()
+  {
+    // Test that constructor throws ParseException when min is greater than max
+    buildHistogram(
+        6,
+        new double[]{4, 10, 12, 18, 20},
+        new double[]{3, 1, 2, 2, 1, 10},
+        0,
+        15,
+        5,  // max
+        10  // min (greater than max)
+    );
+  }
+
+  @Test(expected = org.apache.druid.java.util.common.parsers.ParseException.class)
+  public void testConstructorWithMinGreaterThanMaxInfinity()
+  {
+    // Test that constructor throws ParseException when min is positive infinity and max is negative infinity
+    buildHistogram(
+        6,
+        new double[]{4, 10, 12, 18, 20},
+        new double[]{3, 1, 2, 2, 1, 10},
+        0,
+        15,
+        Double.NEGATIVE_INFINITY,  // max
+        Double.POSITIVE_INFINITY   // min (greater than max)
+    );
+  }
+}
  

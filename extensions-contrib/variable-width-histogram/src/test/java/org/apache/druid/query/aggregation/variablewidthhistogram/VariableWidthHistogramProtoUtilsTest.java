@@ -237,5 +237,103 @@ public class VariableWidthHistogramProtoUtilsTest
     System.out.println("=======================================================\n");
   }
 
+  @Test
+  public void testFromProtoWithNoMinMax()
+  {
+    // Build a proto message without min/max set
+    VariableWidthHistogramProto.VariableWidthHistogram proto = 
+        VariableWidthHistogramProto.VariableWidthHistogram.newBuilder()
+            .setNumBuckets(2)
+            .setMaxNumBuckets(10)
+            .setMissingValueCount(0)
+            .setCount(5.0)
+            // Intentionally not setting min/max
+            .addBoundaries(5.0)
+            .addCounts(2.0)
+            .addCounts(3.0)
+            .build();
+
+    VariableWidthHistogram histogram = VariableWidthHistogramProtoUtils.fromProto(proto);
+
+    Assert.assertNotNull(histogram);
+    Assert.assertEquals(2, histogram.getNumBuckets());
+    Assert.assertEquals(10, histogram.getMaxNumBuckets());
+    Assert.assertEquals(0, histogram.getMissingValueCount());
+    Assert.assertEquals(5.0, histogram.getCount(), 0.0001);
+    
+    // When min/max are not provided, they should default to NEGATIVE_INFINITY and POSITIVE_INFINITY
+    Assert.assertEquals(Double.NEGATIVE_INFINITY, histogram.getMin(), 0.0001);
+    Assert.assertEquals(Double.POSITIVE_INFINITY, histogram.getMax(), 0.0001);
+    
+    Assert.assertArrayEquals(new double[]{5.0}, histogram.getBoundaries(), 0.0001);
+    Assert.assertArrayEquals(new double[]{2.0, 3.0}, histogram.getCounts(), 0.0001);
+  }
+
+  @Test
+  public void testFromBytesWithNoMinMax()
+  {
+    // Build a proto message without min/max and serialize it to bytes
+    VariableWidthHistogramProto.VariableWidthHistogram proto = 
+        VariableWidthHistogramProto.VariableWidthHistogram.newBuilder()
+            .setNumBuckets(3)
+            .setMaxNumBuckets(10)
+            .setMissingValueCount(2)
+            .setCount(10.0)
+            // Intentionally not setting min/max
+            .addBoundaries(10.0)
+            .addBoundaries(20.0)
+            .addCounts(3.0)
+            .addCounts(4.0)
+            .addCounts(3.0)
+            .build();
+
+    byte[] bytes = proto.toByteArray();
+    VariableWidthHistogram histogram = VariableWidthHistogramProtoUtils.fromBytes(bytes);
+
+    Assert.assertNotNull(histogram);
+    Assert.assertEquals(3, histogram.getNumBuckets());
+    Assert.assertEquals(10, histogram.getMaxNumBuckets());
+    Assert.assertEquals(2, histogram.getMissingValueCount());
+    Assert.assertEquals(10.0, histogram.getCount(), 0.0001);
+    
+    // When min/max are not provided, they should default to NEGATIVE_INFINITY and POSITIVE_INFINITY
+    Assert.assertEquals(Double.NEGATIVE_INFINITY, histogram.getMin(), 0.0001);
+    Assert.assertEquals(Double.POSITIVE_INFINITY, histogram.getMax(), 0.0001);
+    
+    Assert.assertArrayEquals(new double[]{10.0, 20.0}, histogram.getBoundaries(), 0.0001);
+    Assert.assertArrayEquals(new double[]{3.0, 4.0, 3.0}, histogram.getCounts(), 0.0001);
+  }
+
+  @Test
+  public void testFromByteBufferWithNoMinMax()
+  {
+    // Build a proto message without min/max and serialize it to ByteBuffer
+    VariableWidthHistogramProto.VariableWidthHistogram proto = 
+        VariableWidthHistogramProto.VariableWidthHistogram.newBuilder()
+            .setNumBuckets(1)
+            .setMaxNumBuckets(5)
+            .setMissingValueCount(1)
+            .setCount(7.0)
+            // Intentionally not setting min/max
+            .addCounts(7.0)
+            .build();
+
+    byte[] bytes = proto.toByteArray();
+    ByteBuffer buffer = ByteBuffer.wrap(bytes);
+    VariableWidthHistogram histogram = VariableWidthHistogramProtoUtils.fromByteBuffer(buffer, bytes.length);
+
+    Assert.assertNotNull(histogram);
+    Assert.assertEquals(1, histogram.getNumBuckets());
+    Assert.assertEquals(5, histogram.getMaxNumBuckets());
+    Assert.assertEquals(1, histogram.getMissingValueCount());
+    Assert.assertEquals(7.0, histogram.getCount(), 0.0001);
+    
+    // When min/max are not provided, they should default to NEGATIVE_INFINITY and POSITIVE_INFINITY
+    Assert.assertEquals(Double.NEGATIVE_INFINITY, histogram.getMin(), 0.0001);
+    Assert.assertEquals(Double.POSITIVE_INFINITY, histogram.getMax(), 0.0001);
+    
+    Assert.assertArrayEquals(new double[]{7.0}, histogram.getCounts(), 0.0001);
+  }
+
 }
 
